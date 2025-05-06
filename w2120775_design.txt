@@ -1,0 +1,159 @@
+START
+
+   IMPORT csv
+   IMPORT required functions (validate_date_input, process_csv_data, save_results_to_file, display_outcomes) FROM w2120775_code (task_a_b_c.py)
+   IMPORT graphics module *
+
+   CLASS HistogramApp
+
+        FUNCTION __init__(self, traffic_data, date)
+            SET self.traffic_data TO traffic_data
+            SET self.date TO date
+            SET self.win TO None
+        END FUNCTION
+
+        FUNCTION setup_window(self)
+            CREATE a window object (self.win) WITH dimensions 1280x720
+            SET the background color OF self.win TO (RGB: 237, 242, 238)
+        END FUNCTION
+
+        FUNCTION draw_histogram(self)
+            SET margin TO 100
+            SET window_width TO 1280
+            SET window_height TO 720
+            SET bar_width TO 15
+            SET category_spacing TO (window_width - 2 * margin) / NUMBER OF traffic_data items
+            SET max_height TO window_height - 4 * margin
+            SET max_value TO MAX value FROM all items IN traffic_data
+
+            DISPLAY histogram title WITH date AT CENTER-TOP OF window AND LABEL "Histogram of Vehicle Frequency per Hour ({self.date})"
+            STYLE title AS bold and black
+            SET size AS 16
+
+            CREATE X-axis AS a horizontal line NEAR the bottom OF window
+            SET line AS gray
+            
+            LABEL X-axis WITH "Hours 00:00 to 24:00" below
+            STYLE title AS bold and gray
+
+            FOR EACH label, values IN traffic_data
+                CALCULATE starting positions FOR bars
+                CALCULATE scaled heights FOR values
+                CREATE two rectangles (bars) USING the calculated positions and heights
+                SET bar colors TO:
+                    - light green (for Elm Avenue)
+                    - light coral (for Hanley Highway)
+                DRAW the rectangles ON the window
+
+                ADD text ABOVE bars TO DISPLAY actual frequencies
+                SET text colour to black AND bold
+                SET size AS 10
+                
+                ADD labels BELOW bars TO DISPLAY hour intervals
+                SET text colour to black AND bold
+                SET size as 10
+            END FOR
+        END FUNCTION
+
+        FUNCTION add_legend(self)
+            SET margin TO 100
+            CREATE legend boxes and labels FOR:
+                - light green box ("Elm Avenue/Rabbit Road")
+                - light coral box ("Hanley Highway/Westway")
+            PLACE legends ON the window USING calculated positions
+            STYLE legend text AS black
+        END FUNCTION
+
+    CLASS HistogramApp
+
+        FUNCTION run(self)
+            CALL setup_window()
+            CALL draw_histogram()
+            CALL add_legend()
+
+            TRY
+                WAIT FOR user mouse click ON self.win
+            FINALLY
+                CLOSE self.win
+        END FUNCTION
+
+    END CLASS
+
+    CLASS MultiCSVProcessor
+
+        FUNCTION __init__(self)
+            SET self.current_data TO None
+        END FUNCTION
+
+        FUNCTION load_csv_file(self, file_path)
+            TRY
+                OPEN file_path AS file IN read mode
+                READ file content USING csv.DictReader
+                CONVERT reader TO a list AND ASSIGN TO self.current_data
+                
+                CREATE an empty dictionary hourly_count
+
+                FOR EACH row IN self.current_data
+                    EXTRACT hour FROM "timeOfDay" column
+                    CONVERT "JunctionName" TO lowercase AND strip whitespace
+                    
+                    IF hour NOT IN hourly_count
+                        INITIALIZE hourly_count[hour] AS [0, 0]
+
+                    IF junction IS "elm avenue/rabbit road"
+                        INCREMENT hourly_count[hour][0]
+                    ELSE IF junction IS "hanley highway/westway"
+                        INCREMENT hourly_count[hour][1]
+                
+                RETURN hourly_count
+            CATCH FileNotFoundError
+                RETURN None
+        END FUNCTION
+
+        FUNCTION clear_previous_data(self)
+            SET self.current_data TO None
+        END FUNCTION
+
+        FUNCTION handle_user_interaction(self)
+            WHILE TRUE
+                PROMPT user WITH "Do you want to select another data file for a different date? (Y/N): "
+                STORE user input AS choice IN uppercase
+
+                IF choice IS "Y"
+                    CALL clear_previous_data()
+                    RETURN True
+                ELSE IF choice IS "N"
+                    RETURN False
+                ELSE
+                    PRINT "Invalid input. Please enter 'Y' or 'N'."
+            END WHILE
+        END FUNCTION
+
+        FUNCTION process_files(self)
+            WHILE TRUE
+                CALL validate_date_input() TO GET day, month, year
+                FORMAT date AS "DD/MM/YYYY"
+                CREATE filename AS "traffic_dataDDMMYYYY.csv"
+                
+                CALL process_csv_data(filename) AND ASSIGN TO processed_data
+                
+                IF processed_data IS NOT None
+                    PRINT "data file selected is", filename
+                    CALL display_outcomes(processed_data)
+                    CALL save_results_to_file(processed_data, filename, file_name="results.txt")
+
+                    CALL load_csv_file(filename) AND ASSIGN TO traffic_data
+                    CREATE app AS HistogramApp(traffic_data, date)
+                    CALL app.run()
+
+                IF NOT handle_user_interaction()
+                    PRINT "End of run"
+                    BREAK
+            END WHILE
+        END FUNCTION
+
+    END CLASS
+         
+        CALL MultiCSVProcessor.process_files()
+    
+END
